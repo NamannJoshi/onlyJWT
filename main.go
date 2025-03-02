@@ -19,6 +19,9 @@ func main() {
 		log.Fatalf("error at postgre store: %v", err)
 		return
 	}
+	if errr := conn.Init(); err != nil {
+		log.Fatalf("error while establishing table: %v", errr)
+	}
 	server := api.NewApiServer(":3000", conn, *secretKey)
 	server.Run()
 }

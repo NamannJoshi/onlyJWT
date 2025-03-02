@@ -7,12 +7,13 @@ type CreateUserReq struct {
 	Email string	`json:"email"`
 	IsAdmin bool	`json:"isAdmin"`
 	Number int	`json:"number"`
+	Password string `json:"password"`
 }
 type CreateUserRes struct {
 	FullName string `json:"fullName"`
 	Email string `json:"email"`
-	IsAdmin string `json:"isAdmin"`
-	Number string `json:"number"`
+	IsAdmin bool `json:"isAdmin"`
+	Number int `json:"number"`
 }
 
 type LoginUserReq struct {
@@ -31,6 +32,7 @@ type User struct {
 	Email     string    `json:"email"`
 	IsAdmin   bool      `json:"isAdmin"`
 	Number    int       `json:"number"`
+	Password string			`json:"password"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }

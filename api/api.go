@@ -2,6 +2,7 @@ package api
 
 import (
 	"demo/token"
+	"demo/utils"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -26,6 +27,7 @@ type ApiError struct {
 func makeHTTPhandler(f ApiFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := f(w, r); err != nil {
+			log.Println("errrrrorz", err)
 			WriteJSON(w, http.StatusBadRequest, ApiError{Error: err.Error()})
 		}
 	}
@@ -66,10 +68,10 @@ func (s *ApiServer) HandleAccount(w http.ResponseWriter, r *http.Request)error{
 }
 
 func (s *ApiServer) HandleAccountByID(w http.ResponseWriter, r *http.Request)error{
-	if r.Method == http.MethodGet {
+	if r.Method == "GET" {
 		return s.GetUserByID(w, r)
 	}
-	if r.Method == http.MethodPut {
+	if r.Method == "PUT" {
 		return s.UpdateUserByID(w, r)
 	}
 	return WriteJSON(w, http.StatusMethodNotAllowed, ApiError{Error: "method not allowed"})
@@ -80,23 +82,39 @@ func (s *ApiServer) CreateUser(w http.ResponseWriter, r *http.Request) error {
 	var req CreateUserReq
 	json.NewDecoder(r.Body).Decode(&req)
 
+	passHash, err := utils.HashPassword(req.Password)
+	if err != nil {
+		return fmt.Errorf("error in hashing password")
+	}
+
+	req.Password = passHash
+	fmt.Println(req)
 	user := NewUser(req)
 
-	s.store.CreateUserDb(user)
-	return nil
-}
-func (s *ApiServer) GetAllUsers(w http.ResponseWriter, r *http.Request) error {
-	u := CreateUserReq{
-		FullName: "gibb",
-		Email: "gialkfabb",
-		IsAdmin: false,
-		Number: 3242,
+	if err := s.store.CreateUserDb(user); err != nil {
+		fmt.Println(err)
+		return WriteJSON(w, http.StatusBadRequest, err)
 	}
-	user := NewUser(u)
-	return WriteJSON(w, http.StatusOK, user)
+	return WriteJSON(w, http.StatusOK, &CreateUserRes{
+		FullName: req.FullName,
+		Email: req.Email,
+		IsAdmin: req.IsAdmin,
+		Number: req.Number,
+	})
+}
+
+func (s *ApiServer) GetAllUsers(w http.ResponseWriter, r *http.Request) error {
+	log.Println("apka swagat hai!!!!")
+	users, err := s.store.GetUsersDb()
+	log.Println(users)
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, err)
+	}
+	return WriteJSON(w, http.StatusOK, users)
 }
 
 func (s *ApiServer) GetUserByID(w http.ResponseWriter, r *http.Request) error {
+	fmt.Println("tommow is never")
 	return WriteJSON(w, http.StatusOK, ApiError{Error: "you go girly"})
 }
 
@@ -113,13 +131,29 @@ func (s *ApiServer) LoginUser(w http.ResponseWriter, r *http.Request) error {
 	var req LoginUserReq
 	json.NewDecoder(r.Body).Decode(&req)
 
-	accessToken, err := s.token.CreateToken(23, "kdlafjfakfa", false, 15*time.Minute)
+	gu, err := s.store.GetUserByEmailDb(req.Email)
+	fmt.Println(gu)
+	if err != nil {
+		return fmt.Errorf("err fetching user by email %w", err)
+	}
+
+	accessToken, err := s.token.CreateToken(gu.ID, gu.Email, gu.IsAdmin, 15*time.Minute)
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, ApiError{Error: err.Error()})
 	}
 	log.Println("here is your access token",accessToken)
 
-	return WriteJSON(w, http.StatusOK, accessToken)
+	res := LoginUserRes{
+		AccessToken: accessToken,
+		UserRes: CreateUserRes{
+			FullName: gu.FullName,
+			Email: gu.Email,
+			IsAdmin: gu.IsAdmin,
+			Number: gu.Number,
+		},
+	}
+
+	return WriteJSON(w, http.StatusOK, res)
 }
 
 func (s *ApiServer) AuthMiddleware(f ApiFunc) ApiFunc {
