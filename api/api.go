@@ -58,10 +58,10 @@ func (s *ApiServer) Run() {
 }
 
 func (s *ApiServer) HandleAccount(w http.ResponseWriter, r *http.Request)error{
-	if r.Method == http.MethodGet {
+	if r.Method == "GET" {
 		return s.GetAllUsers(w, r)
 	}
-	if r.Method == http.MethodPost {
+	if r.Method == "POST" {
 		return s.CreateUser(w, r)
 	}
 	return WriteJSON(w, http.StatusMethodNotAllowed, ApiError{Error: "method not allowed"})
@@ -73,6 +73,9 @@ func (s *ApiServer) HandleAccountByID(w http.ResponseWriter, r *http.Request)err
 	}
 	if r.Method == "PUT" {
 		return s.UpdateUserByID(w, r)
+	}
+	if r.Method == "DELETE" {
+		return s.DeleteUserByID(w, r)
 	}
 	return WriteJSON(w, http.StatusMethodNotAllowed, ApiError{Error: "method not allowed"})
 }
@@ -114,16 +117,51 @@ func (s *ApiServer) GetAllUsers(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *ApiServer) GetUserByID(w http.ResponseWriter, r *http.Request) error {
-	fmt.Println("tommow is never")
-	return WriteJSON(w, http.StatusOK, ApiError{Error: "you go girly"})
+	idStr := mux.Vars(r)["id"]
+	user, err := s.store.GetUserByIdDb(idStr)
+	if err != nil {
+		return fmt.Errorf("error while fetching user by id %w", err)
+	}
+
+	return WriteJSON(w, http.StatusOK, user)
 }
 
 func (s *ApiServer) GetUserByEmail(w http.ResponseWriter, r *http.Request) error {
+	// res := r.URL.Query()["email"]
+	// user, err := s.store.GetUserByIdDb(res)
+	// if err != nil {
+	// 	return fmt.Errorf("error while fetching user by id %w", err)
+	// }
 	return nil
 }
 
 func (s *ApiServer) UpdateUserByID(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	id := mux.Vars(r)["id"]
+	var req UpdateUserReq
+	json.NewDecoder(r.Body).Decode(&req)
+	log.Println("")
+	log.Println("")
+	log.Println("")
+	log.Println("GGGGGGGGG")
+	log.Println(*req.Email)
+	log.Println("")
+	log.Println("")
+	log.Println("")
+	log.Println("")
+	log.Println("")
+
+	if err := s.store.UpdateUserByIDDb(&req, id); err != nil {
+		return WriteJSON(w, http.StatusBadRequest, ApiError{Error: err.Error()})
+	}
+	return WriteJSON(w, http.StatusOK, nil)
+}
+
+func (s *ApiServer) DeleteUserByID(w http.ResponseWriter, r *http.Request) error {
+	id := mux.Vars(r)["id"]
+	if err := s.store.DeleteUserByIDDb(id); err != nil {
+		return fmt.Errorf("can't delete user %w", err)
+	}
+	return WriteJSON(w, http.StatusOK, nil)
 }
 
 func (s *ApiServer) LoginUser(w http.ResponseWriter, r *http.Request) error {
@@ -141,7 +179,7 @@ func (s *ApiServer) LoginUser(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, ApiError{Error: err.Error()})
 	}
-	log.Println("here is your access token",accessToken)
+	// log.Println("here is your access token",accessToken)
 
 	res := LoginUserRes{
 		AccessToken: accessToken,
@@ -165,16 +203,15 @@ func (s *ApiServer) AuthMiddleware(f ApiFunc) ApiFunc {
 
 		filteredAuth := strings.TrimSpace(strings.Replace(authStr, "Bearer", "", 1))
 		filteredAuth = strings.Trim(filteredAuth, "\"")
-		log.Println(filteredAuth)
+		// log.Println(filteredAuth)
 
 
 		// log.Println(authStr)
-		authClaims, err := s.token.VerifyToken(filteredAuth)
+		_, err := s.token.VerifyToken(filteredAuth)
 		if err != nil {
 			return fmt.Errorf("you have verifying non defying lode lagaing error: %v", err)
 		}
 		
-		log.Println(authClaims)
-		return WriteJSON(w, http.StatusOK, authClaims)
+		return f(w,r)
 	}
 }

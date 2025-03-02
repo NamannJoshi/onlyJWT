@@ -16,6 +16,13 @@ type CreateUserRes struct {
 	Number int `json:"number"`
 }
 
+type UpdateUserReq struct {
+	FullName *string `json:"fullName"`
+	Email *string `json:"email"`
+	Number *int `json:"number"`
+	Password *string `json:"password"`
+}
+
 type LoginUserReq struct {
 	Email string `json:"email"`
 	Password string `json:"password"`

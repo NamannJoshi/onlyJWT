@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"demo/utils"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -12,6 +15,9 @@ type Storage interface {
 	CreateUserDb(*User) error
 	GetUsersDb() ([]*User, error)
 	GetUserByEmailDb(string)(*User, error)
+	GetUserByIdDb(string)(*User, error)
+	DeleteUserByIDDb(string)error
+	UpdateUserByIDDb(*UpdateUserReq, string)error
 }
 
 type PostgreStore struct {
@@ -100,6 +106,27 @@ func (dbs *PostgreStore)GetUsersDb() ([]*User, error) {
 	return usersList, nil
 }
 
+func (dbs *PostgreStore)GetUserByIdDb(accNum string) (*User, error) {
+	query := `select * from users where id = @id;`
+	id, err := strconv.Atoi(accNum)
+	if err != nil {
+		return nil, fmt.Errorf("wrong id type is passed", err)
+	}
+	args := pgx.NamedArgs{
+		"id": id,
+	}
+	row := dbs.conn.QueryRow(context.Background(), query, args)
+	fmt.Println(row)
+
+	var user User
+	errr := row.Scan(&user.ID, &user.FullName, &user.Email, &user.IsAdmin, &user.Number, &user.Password, &user.CreatedAt, &user.UpdatedAt)
+	if errr != nil {
+		return nil, errr
+	}
+
+	return &user, nil
+}
+
 func (dbs *PostgreStore)GetUserByEmailDb(email string) (*User, error) {
 	query := `select * from users where email = @email;`
 	args := pgx.NamedArgs{
@@ -115,4 +142,64 @@ func (dbs *PostgreStore)GetUserByEmailDb(email string) (*User, error) {
 	}
 
 	return &user, nil
+}
+
+func (dbs *PostgreStore)DeleteUserByIDDb(idd string) error {
+	query := `delete from users where id = @id`
+	id, err := strconv.Atoi(idd)
+	if err != nil {
+		return fmt.Errorf("provide proper id for deletion")
+	}
+
+	args := pgx.NamedArgs{
+		"id": id,
+	}
+	if _, errr := dbs.conn.Exec(context.Background(), query, args); errr != nil {
+		return fmt.Errorf("error while deleting in db %w", errr)
+	}
+	return nil
+}
+
+func (dbs *PostgreStore)UpdateUserByIDDb(upReq *UpdateUserReq, id string) error {
+	idd , err := strconv.Atoi(id)
+	if err != nil {
+		return fmt.Errorf("incorrect id value (update)", err)
+	}
+	updates := make(map[string]any)
+	var cols []string
+	args := pgx.NamedArgs{}
+
+	if upReq.FullName != nil {
+		updates["fullName"] = *upReq.FullName
+	}
+	if upReq.Email != nil {
+		updates["email"] = *upReq.Email
+	}
+	if upReq.Number != nil {
+		updates["number"] = *upReq.Number
+	}
+	if upReq.Password != nil {
+		hashed, err := utils.HashPassword(*upReq.Password)
+		if err != nil {
+			fmt.Errorf("error in hashing pass", err)
+		}
+		updates["password"] = hashed
+	}
+	
+	for key, value := range updates {
+		cols = append(cols, fmt.Sprintf("%s = @%s", key, key))
+		args[key] = value
+	}
+	args["id"] = idd
+
+	if len(cols) == 0 {
+		return nil
+	}
+
+	queryStr := fmt.Sprintf("update users set %s where id = @id", strings.Join(cols, ", "))
+
+	if _, err := dbs.conn.Exec(context.Background(), queryStr, args); err != nil {
+		return fmt.Errorf("error updating id: %w", err)
+	}
+	return nil
 }
